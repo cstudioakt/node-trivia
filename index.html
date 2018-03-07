@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Trivia</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+		<style>
+			#trivia-container {
+				position: relative;
+			}
+
+			#game {
+				height: 200px;
+				max-height: 200px;
+				border: 1px solid #000;
+				font-size: 1.2em;
+				overflow: scroll;
+			}
+
+			#player-container {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0,0,0,0.3);
+			}
+
+			.aligner-center {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				height: 100%;
+			}
+
+			.aligner-center .item {
+				align-self: center;
+			}
+
+			.player-login {
+				font-size: 2em;
+			}
+
+			.player-login input {
+				border: none;
+				background: transparent;
+				box-shadow: none;
+				border-bottom: 1px solid #000;
+				border-radius: 0;
+				font-size: 1em;
+				height: auto;
+			}
+
+			.player-login input::placeholder {
+				color: #000;
+			}
+
+			.player-login input:focus {
+				box-shadow: none;
+			}
+
+			#game ul {
+				padding: 0;
+				list-style: none;
+			}
+
+			#game ul li {
+				font-size: 0.8em;
+				width: 100%;
+				text-indent: 0;
+				padding: 5px;
+			}
+
+			li.text-danger {
+				background-color: rgba(255,0,0,0.2);
+			}
+
+			li.text-info {
+				background-color: rgba(0,0,255,0.2);
+			}
+
+			li.text-success {
+				background-color: rgba(0,255,0,0.2);
+			}
+
+
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div id="trivia-container">
+				<div id="game">
+					<ul></ul>
+				</div>
+				<div id="answers" class="form-inline">
+					<div class="form-group">
+						<input type="text" class="form-control" id="answer" placeholder="Type your answer">
+					</div>
+					<button type="submit" class="btn btn-default">Submit</button>
+				</div>
+				<div id="player-container" class="form-inline" style="display:none;">
+					<div class="aligner-center">
+						<div class="item">
+							<div class="form-group player-login">
+								<label for="player">Your name is</label>
+								<input type="text" class="form-control" id="player" placeholder="...">
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="http://sandbox.192.168.1.110.xip.io:8888/node/trivia/node_modules/socket.io-client/dist/socket.io.js"></script>
+		<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+		<script>
+			$(function () {
+				var game = $('#game ul');
+				console.log(game);
+
+				var socket = io('http://sandbox.192.168.1.110.xip.io:3000');
+
+				//The user is connected! Let's see if they are auth with the trivia app yet!
+				socket.on('connected', function(data) {
+					playerAuth();
+				})
+
+				//TODO:: Not sure what to do here.
+				socket.on('player', function(player) {
+					console.log(player);
+				})
+
+				//Detect errors!
+				socket.on('error', function(msg){
+					displayMessage(msg);
+				})
+
+				//Get the question!
+				socket.on('ask question', function(questionObj){
+					console.log(questionObj.question);
+					displayMessage({
+						msg : questionObj.question,
+						type: 'question'
+					});
+				});
+
+				socket.on('answer correct', function(resp){
+					displayMessage({
+						msg: resp,
+						type: 'correct'
+					});
+				});
+
+				socket.on('answer incorrect', function(resp){
+					displayMessage({
+						msg: resp,
+						type: 'err'
+					});
+				});
+
+				//TODO:: No Storage, do something!
+				if (typeof(Storage) == "undefined") {
+					console.log('No Storage!');
+				}
+
+				function displayMessage(data) {
+					if( data.type === 'err' ) {
+						game.append(
+							$('<li/>').addClass('text-danger').text(data.msg)
+						);
+					}
+
+					if( data.type === 'normal' ) {
+						game.append($('<li/>').text(data.msg));
+					}
+
+					if( data.type === 'question' ) {
+						game.append($('<li/>').addClass('text-info').text(data.msg));
+					}
+
+					if( data.type === 'correct' ) {
+						game.append($('<li/>').addClass('text-success').text(data.msg));
+					}
+				}
+
+				function playerAuth() {
+					var player = localStorage.getItem('player');
+					if(player == null) {
+						$('#player-container').show();
+					} else {
+						player = JSON.parse(player);
+						socket.emit('auth player', player);
+					}
+				}
+
+				$('#player').on('keypress', function(e){
+					var playerName = $(this).val();
+					if( e.keyCode == 13 ) {
+						e.preventDefault();
+						playerID = localStorage.setItem('player', JSON.stringify({
+							id : socket.id,
+							name : playerName,
+							clientIp : '10.0.1.1' //Change to dynamic value
+						}));
+						socket.emit('add player', {
+							playerId : socket.id,//playerID,
+							clientIp : '10.0.1.1',
+							name: playerName
+						});
+					}
+				});
+
+				$('#answer').on('keypress', function(e){
+					var data = $(this).val();
+					if( e.keyCode == 13 ) {
+						e.preventDefault();
+						socket.emit('message', {
+							msg: data,
+							player: JSON.parse(localStorage.getItem('player'))
+						});
+						console.log(data);
+					}
+				});
+			});
+		</script>
+	</body>
+</html>
