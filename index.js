@@ -1,37 +1,50 @@
 var rp = require('request-promise');
 var server = require('http').createServer();
 var io = require('socket.io')(server);
+var moment = require('moment');
+
+
+console.log();
 
 server.listen(3000);
 io.on('connection', function(socket){
-	//User
 	socket.emit('connected', true);
-	console.log('User Connected');
+	console.log('User Connected: ' + socket.id);
 
 	socket.on('disconnect', function(){
 		console.log('Ended connection');
 	});
 
 	socket.on('auth player', function(data) {
-		socket.emit('player', trivia.authPlayer(data));
+		console.log("[!] Auth Player!");
+		player = trivia.authPlayer(data);
+		socket.emit('login success', player);
+		trivia.emitLeaderboard();
 		trivia.gameInProgress();
-		console.log(trivia.players);
+
+		io.to(socket.id).emit('info', `${player.name}, welcome to the game!`);
+		console.log(socket.rooms);
 	});
 
 	socket.on('add player', function(data){
-		trivia.addPlayer(data);
+		socket.emit('login success', trivia.addPlayer(data));
 		trivia.gameInProgress();
 	});
 
 	socket.on('message', function(data){
 		trivia.listen(data, socket.id);
 	})
+
+	socket.on('error', (error) => {
+		console.log(error);
+	});
 });
 
 class Trivia {
 	constructor() {
 		console.log('[!] Trivia App is running!');
 		this.inProgress = false;
+		this.timer;
 		this.players = {};
 		this.playerCount = 0; // count of total players joined, not active players
 		this.activePlayerCount = 0; // count of players currently connected
@@ -49,7 +62,7 @@ class Trivia {
 
 	static get TRIVIA_URL() {
 		//Possible variations >> https://opentdb.com/api.php?amount=10&difficulty=easy&type=boolean
-		return 'https://opentdb.com/api.php?amount=10';
+		return 'https://opentdb.com/api.php?amount=10&difficulty=easy&category=14';
 	}
 
 	static get MAX_NAME_LENGTH() {
@@ -71,6 +84,7 @@ class Trivia {
 		this.playerCount++;
 		this.players[player.id] = {
 			id: player.id,
+			socketID: player.socketID,
 			createdTime: new Date().getTime(),
 			lastActiveTime: new Date().getTime(),
 			lastWinTime: 0,
@@ -87,6 +101,7 @@ class Trivia {
 		if(this.players[player.id] === undefined) {
 			return this.addPlayer(player);
 		} else {
+			this.players[player.id].socketID = player.socketID;
 			return this.players[player.id];
 		}
 	}
@@ -95,9 +110,10 @@ class Trivia {
 		name = name || '';
 		name = name.trim().replace(/\s+/g,'_');
 		name = name.replace(/\W/g,'');
-		if (name.length > this.MAX_NAME_LENGTH) {
-			name = name.substring(0,this.MAX_NAME_LENGTH-1) + '_';
+		if (name.length > Trivia.MAX_NAME_LENGTH) {
+			name = name.substring(0,Trivia.MAX_NAME_LENGTH-1) + '_';
 		}
+		console.log(`Name set to: ${name}`);
 		return name;
 	}
 
@@ -117,16 +133,18 @@ class Trivia {
 	answer(data) {
 		console.log('Answer: '+data.msg);
 		if(data.msg.toUpperCase() == this.activeQuestion.correct_answer.toUpperCase()) {
-			io.emit('answer correct', 'Correct!');
-			this.answerCleanup(data.player);
+			io.emit('answer correct', `<strong>${data.player.name}</strong> got it right!`);
+			this.awardPoints(data.player);
+			this.nextQuestion();
 		} else {
-			io.emit('answer incorrect', 'Sorry :(!');
+			io.emit('answer incorrect', `Sorry <strong>${data.player.name}</strong>. It isn't <u>${data.msg}</u>`);
 			console.log(this.activeQuestion);
 		}
 	}
 
-	answerCleanup(player) {
+	awardPoints(player) {
 		this.players[player.id].points += 5;
+		this.emitLeaderboard();
 	}
 
 	play() {
@@ -156,11 +174,24 @@ class Trivia {
 		console.log('Message dispatched!');
 	}
 
+	nextQuestion() {
+		this.questions.shift();
+		this.activeQuestion = this.questions[0];
+		clearTimeout(this.timer);
+		this.timer = setTimeout(() => {
+			this.askQuestion()
+		}, 5000);
+	}
+
 	gameInProgress() {
 		console.log("[!] Game in progress?: "+this.inProgress);
 		if(this.inProgress === true) {
 			this.askQuestion();
 		}
+	}
+
+	emitLeaderboard() {
+		io.emit('leaderboard', this.players);
 	}
 }
 

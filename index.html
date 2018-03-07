@@ -5,13 +5,14 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Trivia</title>
+		<script src="https://use.fontawesome.com/77d973d20b.js"></script>
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 		<style>
 			#trivia-container {
 				position: relative;
 			}
 
-			#game {
+			#game, #leaderboard {
 				height: 200px;
 				max-height: 200px;
 				border: 1px solid #000;
@@ -85,22 +86,42 @@
 				background-color: rgba(0,255,0,0.2);
 			}
 
+			li.text-muted {
+				background-color: rgba(50,55,50,0.2);
+			}
+
+			#leaderboard ul li {
+				padding: 5px;
+				font-size: 0.8em;
+				background-color: #fee;
+				border-bottom: 1px solid #ccc;
+			}
+
 
 		</style>
 	</head>
 	<body>
 		<div class="container">
-			<div id="trivia-container">
-				<div id="game">
-					<ul></ul>
-				</div>
-				<div id="answers" class="form-inline">
-					<div class="form-group">
-						<input type="text" class="form-control" id="answer" placeholder="Type your answer">
+			<div class="row game-container">
+				<div class="col-xs-9">
+					<div id="trivia-container">
+						<div id="game">
+							<ul></ul>
+						</div>
+						<div id="answers" class="form-inline">
+							<div class="form-group">
+								<input type="text" class="form-control" id="answer" placeholder="Type your answer">
+							</div>
+							<button type="submit" class="btn btn-default">Submit</button>
+						</div>
 					</div>
-					<button type="submit" class="btn btn-default">Submit</button>
 				</div>
-				<div id="player-container" class="form-inline" style="display:none;">
+				<div class="col-xs-3">
+					<div id="leaderboard">
+						<ul class="list-unstyled"><ul>
+					</div>
+				</div>
+				<div id="player-container" class="form-inline" style="">
 					<div class="aligner-center">
 						<div class="item">
 							<div class="form-group player-login">
@@ -112,15 +133,16 @@
 				</div>
 			</div>
 		</div>
-		<script src="http://sandbox.192.168.1.110.xip.io:8888/node/trivia/node_modules/socket.io-client/dist/socket.io.js"></script>
+		<script src="http://sandbox.10.0.1.33.xip.io:8888/node/trivia/node_modules/socket.io-client/dist/socket.io.js"></script>
 		<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 		<script>
 			$(function () {
+				var gameContainer = $('#game');
 				var game = $('#game ul');
 				console.log(game);
 
-				var socket = io('http://sandbox.192.168.1.110.xip.io:3000');
+				var socket = io('http://sandbox.10.0.1.33.xip.io:3000/');
 
 				//The user is connected! Let's see if they are auth with the trivia app yet!
 				socket.on('connected', function(data) {
@@ -128,8 +150,13 @@
 				})
 
 				//TODO:: Not sure what to do here.
-				socket.on('player', function(player) {
+				socket.on('login success', function(player) {
 					console.log(player);
+					$('#player-container').hide();
+					displayMessage({
+						msg: player.name,
+						type: 'login'
+					})
 				})
 
 				//Detect errors!
@@ -141,7 +168,7 @@
 				socket.on('ask question', function(questionObj){
 					console.log(questionObj.question);
 					displayMessage({
-						msg : questionObj.question,
+						msg : questionObj,
 						type: 'question'
 					});
 				});
@@ -160,6 +187,26 @@
 					});
 				});
 
+				socket.on('info', function(resp){
+					console.log(resp);
+					displayMessage({
+						msg: resp,
+						type: 'normal'
+					});
+				})
+
+				socket.on('leaderboard', function(resp){
+					var leaderboard = $('#leaderboard ul');
+					leaderboard.html('');
+					for(var i in resp) {
+						leaderboard.append(
+							$('<li/>').html(
+								`<strong>${resp[i].points}</strong> - ${resp[i].name}`
+							)
+						);
+					}
+				})
+
 				//TODO:: No Storage, do something!
 				if (typeof(Storage) == "undefined") {
 					console.log('No Storage!');
@@ -168,21 +215,35 @@
 				function displayMessage(data) {
 					if( data.type === 'err' ) {
 						game.append(
-							$('<li/>').addClass('text-danger').text(data.msg)
+							$('<li/>').addClass('text-danger').html(data.msg)
 						);
 					}
 
 					if( data.type === 'normal' ) {
-						game.append($('<li/>').text(data.msg));
+						game.append($('<li/>').html(data.msg));
 					}
 
 					if( data.type === 'question' ) {
-						game.append($('<li/>').addClass('text-info').text(data.msg));
+						game.html('');
+						game.append(
+							$('<li/>').addClass('text-info').append(
+								$('<h4/>').html(`<span class="fa fa-question-circle"></span> <u>${data.msg.question}</u>`),
+								$('<h5/>').html(`Category: <u>${data.msg.category}</u> | Type: <u>${data.msg.type}</u>`)
+							)
+						);
 					}
 
 					if( data.type === 'correct' ) {
-						game.append($('<li/>').addClass('text-success').text(data.msg));
+						game.append($('<li/>').addClass('text-success').html(data.msg));
 					}
+
+					if( data.type === 'login' ) {
+						game.append($('<li/>').addClass('text-muted').html(
+							"User logged in: " + data.msg
+						));
+					}
+
+					gameContainer.scrollTop(gameContainer.height());
 				}
 
 				function playerAuth() {
@@ -191,7 +252,9 @@
 						$('#player-container').show();
 					} else {
 						player = JSON.parse(player);
+						player.socketID = socket.id;
 						socket.emit('auth player', player);
+						console.log("SocketID Sent!: " + socket.id);
 					}
 				}
 
@@ -199,13 +262,15 @@
 					var playerName = $(this).val();
 					if( e.keyCode == 13 ) {
 						e.preventDefault();
-						playerID = localStorage.setItem('player', JSON.stringify({
+						localStorage.setItem('player', JSON.stringify({
 							id : socket.id,
+							socketID : socket.id,
 							name : playerName,
 							clientIp : '10.0.1.1' //Change to dynamic value
 						}));
 						socket.emit('add player', {
-							playerId : socket.id,//playerID,
+							id : socket.id,//playerID,
+							socketID : socket.id,
 							clientIp : '10.0.1.1',
 							name: playerName
 						});
@@ -221,6 +286,7 @@
 							player: JSON.parse(localStorage.getItem('player'))
 						});
 						console.log(data);
+						$(this).val('');
 					}
 				});
 			});

@@ -9,6 +9,7 @@
   "author": "Cory Steelman",
   "license": "ISC",
   "dependencies": {
+    "moment-timer": "^1.2.2",
     "promises": "^0.2.5",
     "request": "^2.83.0",
     "request-promise": "^4.2.2",
