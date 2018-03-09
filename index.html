@@ -6,7 +6,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Trivia</title>
 		<script src="https://use.fontawesome.com/77d973d20b.js"></script>
-		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" crossorigin="anonymous">
 		<style>
 			#trivia-container {
 				position: relative;
@@ -20,7 +20,8 @@
 				overflow: scroll;
 			}
 
-			#player-container {
+			.cover-all
+			 {
 				position: absolute;
 				top: 0;
 				left: 0;
@@ -52,14 +53,16 @@
 				border-radius: 0;
 				font-size: 1em;
 				height: auto;
+				color: 111;
 			}
 
 			.player-login input::placeholder {
-				color: #000;
+				color: #999;
 			}
 
 			.player-login input:focus {
 				box-shadow: none;
+				border-bottom-color: #000;
 			}
 
 			#game ul {
@@ -121,38 +124,65 @@
 						<ul class="list-unstyled"><ul>
 					</div>
 				</div>
-				<div id="player-container" class="form-inline" style="">
+
+				<!-- COVER ALLS -->
+				<div id="loader" class="cover-all" style="display:block;">
+					<div class="aligner-center">
+						<div class="item">
+							<span class="fa fa-spinner fa-pulse fa-5x fa-fw"></span>
+						</div>
+					</div>
+				</div>
+
+				<div id="offline" class="cover-all" style="display:none;">
+					<div class="aligner-center">
+						<div class="item">
+							<div class="alert alert-danger">
+								Trivia is offline!
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div id="login-container" class="form-inline cover-all" style="display:none;">
 					<div class="aligner-center">
 						<div class="item">
 							<div class="form-group player-login">
-								<label for="player">Your name is</label>
-								<input type="text" class="form-control" id="player" placeholder="...">
+								<label for="player">Welcome to the game</label>
+								<input type="text" class="form-control" id="player" placeholder="name">
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 		</div>
-		<script src="http://sandbox.10.0.1.33.xip.io:8888/node/trivia/node_modules/socket.io-client/dist/socket.io.js"></script>
 		<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
-		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" crossorigin="anonymous"></script>
+		<script src="http://sandbox.10.0.1.33.xip.io:8888/node/trivia/node_modules/socket.io-client/dist/socket.io.js"></script>
 		<script>
 			$(function () {
 				var gameContainer = $('#game');
 				var game = $('#game ul');
-				console.log(game);
-
 				var socket = io('http://sandbox.10.0.1.33.xip.io:3000/');
 
+				var offlineCountdown = window.setTimeout(function() {
+					showOffline();
+				}, 5000);
 				//The user is connected! Let's see if they are auth with the trivia app yet!
 				socket.on('connected', function(data) {
+					removeLoader();
+					removeOffline();
 					playerAuth();
+				});
+
+				socket.on('disconnect', function(data) {
+					showOffline();
 				})
 
 				//TODO:: Not sure what to do here.
 				socket.on('login success', function(player) {
 					console.log(player);
-					$('#player-container').hide();
+					hideLogin();
 					displayMessage({
 						msg: player.name,
 						type: 'login'
@@ -212,6 +242,29 @@
 					console.log('No Storage!');
 				}
 
+				function removeLoader() {
+					$('#loader').hide();
+				}
+
+				function removeOffline() {
+					clearTimeout(offlineCountdown);
+					$('#offline').hide();
+				}
+
+				function showOffline() {
+					removeLoader();
+					hideLogin();
+					$('#offline').show();
+				}
+
+				function showLogin() {
+					$('#login-container').show();
+				}
+
+				function hideLogin() {
+					$('#login-container').hide();
+				}
+
 				function displayMessage(data) {
 					if( data.type === 'err' ) {
 						game.append(
@@ -249,7 +302,7 @@
 				function playerAuth() {
 					var player = localStorage.getItem('player');
 					if(player == null) {
-						$('#player-container').show();
+						showLogin();
 					} else {
 						player = JSON.parse(player);
 						player.socketID = socket.id;
